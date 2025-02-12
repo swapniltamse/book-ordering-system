@@ -21,46 +21,50 @@ def process_book_orders():
             time.sleep(2)
             continue
         
-        for message in messages:
-            receipt_handle = message['ReceiptHandle']
-            order = json.loads(message['Body'])
-            order_id = order.get('order_id')
-            title = order.get('title')
-            author = order.get('author')
-            isbn = order.get('isbn')
-            order_format = order.get('format')
-            delivery_info = order.get('delivery_info')
-            
-            print(f"Processing order {order_id} for '{title}' by {author}...")
-            time.sleep(1)
-            
-            # Prepare a notification message based on the order format
-            if order_format.lower() == "physical":
-                notification_message = (
-                    f"Order {order_id}: '{title}' by {author} will be shipped to "
-                    f"{delivery_info.get('address')}."
+        try:
+            for message in messages:
+                receipt_handle = message['ReceiptHandle']
+                order = json.loads(message['Body'])
+                order_id = order.get('order_id')
+                title = order.get('title')
+                author = order.get('author')
+                isbn = order.get('isbn')
+                order_format = order.get('format')
+                delivery_info = order.get('delivery_info')
+                
+                print(f"Processing order {order_id} for '{title}' by {author}...")
+                time.sleep(1)
+                
+                # Prepare a notification message based on the order format
+                if order_format.lower() == "physical":
+                    notification_message = (
+                        f"Order {order_id}: '{title}' by {author} will be shipped to "
+                        f"{delivery_info.get('address')}."
+                    )
+                else:
+                    notification_message = (
+                        f"Order {order_id}: '{title}' by {author} is now available for download on "
+                        f"your Kindle account ({delivery_info.get('kindle_email')})."
+                    )
+                
+                # Publish the notification to the SNS topic
+                sns.publish(
+                    TopicArn=SNS_TOPIC_ARN,
+                    Message=notification_message,
+                    Subject="Swapnil's Book Order Processed"
                 )
-            else:
-                notification_message = (
-                    f"Order {order_id}: '{title}' by {author} is now available for download on "
-                    f"your Kindle account ({delivery_info.get('kindle_email')})."
+                
+                print(f"Notification sent for order {order_id}.")
+                
+                # Delete the message from the queue to prevent reprocessing
+                sqs.delete_message(
+                    QueueUrl=SQS_QUEUE_URL,
+                    ReceiptHandle=receipt_handle
                 )
-            
-            # Publish the notification to the SNS topic
-            sns.publish(
-                TopicArn=SNS_TOPIC_ARN,
-                Message=notification_message,
-                Subject="Swapnil's Book Order Processed"
-            )
-            
-            print(f"Notification sent for order {order_id}.")
-            
-            # Delete the message from the queue to prevent reprocessing
-            sqs.delete_message(
-                QueueUrl=SQS_QUEUE_URL,
-                ReceiptHandle=receipt_handle
-            )
-            print(f"Order {order_id} removed from queue.\n")
+                print(f"Order {order_id} removed from queue.\n")
+        except KeyboardInterrupt:
+            print("\nWorker interrupted. Exiting gracefully...")
+            sys.exit(0)
             
 if __name__ == "__main__":
     process_book_orders()

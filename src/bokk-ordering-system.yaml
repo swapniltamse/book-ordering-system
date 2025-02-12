@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  CloudFormation template for the Book Ordering System.
+  This stack creates:
+    - An SQS Queue (BookOrdersQueue)
+    - An SNS Topic (BookOrderNotifications)
+    - An SNS email subscription (requires confirmation)
+    - A Secrets Manager secret (BookOrderSystemConfig) containing the configuration details
+
+Parameters:
+  EmailSubscription:
+    Description: Email address to subscribe to the SNS topic.
+    Type: String
+
+Resources:
+  BookOrdersQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: BookOrdersQueue
+
+  BookOrderNotifications:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: BookOrderNotifications
+
+  SNSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: !Ref EmailSubscription
+      TopicArn: !Ref BookOrderNotifications
+
+  BookOrderSystemConfigSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: BookOrderSystemConfig
+      Description: Secret for the Book Ordering System configuration.
+      SecretString: !Sub |
+        {
+          "AWS_REGION": "${AWS::Region}",
+          "SQS_QUEUE_URL": "https://sqs.${AWS::Region}.amazonaws.com/${AWS::AccountId}/BookOrdersQueue",
+          "SNS_TOPIC_ARN": "${BookOrderNotifications}"
+        }
+
+Outputs:
+  SQSQueueURL:
+    Description: URL of the SQS Queue.
+    Value: !GetAtt BookOrdersQueue.QueueUrl
+  SNSTopicARN:
+    Description: ARN of the SNS Topic.
+    Value: !Ref BookOrderNotifications
+  SecretARN:
+    Description: ARN of the Secrets Manager secret.
+    Value: !Ref BookOrderSystemConfigSecret
